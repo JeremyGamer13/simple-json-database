@@ -6,24 +6,28 @@ const instances = {};
 class Database {
     /**
      * @typedef {object} SnapshotOptions
-     * @property {boolean} [enabled=false] Whether the snapshots are enabled
-     * @property {number} [interval=86400000] The interval between each snapshot
-     * @property {string} [path='./backups/'] The path of the backups
+     * @property {boolean} [enabled=false] Whether or not snapshots are enabled
+     * @property {number} interval The interval in milliseconds between each snapshot
+     * @property {string} path The folder path of the backups
+     * @property {boolean?} [indented=false]
+     * @property {number?} max Maximum number of snapshots that can be in the folder
      */
 
     /**
      * @typedef {object} DatabaseOptions
-     * @property {SnapshotOptions} snapshots
+     * @property {boolean?} forceNew
+     * @property {boolean?} indented
+     * @property {SnapshotOptions?} snapshots
      */
 
     /**
      * @param {string} filePath The path of the json file used for the database.
-     * @param {DatabaseOptions} options
+     * @param {DatabaseOptions?} options
      */
-    constructor(filePath, options) {
+    constructor(filePath, options = {}) {
         if (!(filePath && typeof filePath === "string")) throw new Error("Provide a valid file path for the database");
 
-        if (instances[filePath]) {
+        if (instances[filePath] && !options.forceNew) {
             // if we return an existing instance, javascript will use it instead
             // see https://stackoverflow.com/questions/11145159/implement-javascript-instance-store-by-returning-existing-instance-from-construc
             return instances[filePath];
@@ -40,19 +44,37 @@ class Database {
          * The options for the database
          * @type {DatabaseOptions}
          */
-        this.options = options || {};
+        this.options = options;
 
-        if (this.options.snapshots && this.options.snapshots.enabled) {
-            const path = this.options.snapshots.path;
-            if (!(path && typeof path === "string")) throw new Error("Provide a valid file path for database snapshots");
-            if (typeof this.options.snapshots.interval !== "number") throw new Error("Provide the interval in milliseconds for snapshot creation");
+        if (options.snapshots && options.snapshots.enabled) {
+            const folderPath = options.snapshots.path;
+            if (!(folderPath && typeof folderPath === "string")) throw new Error("Provide a valid folder path for database snapshots");
+            if (typeof options.snapshots.interval !== "number") throw new Error("Provide the interval in milliseconds for snapshot creation");
 
-            if (!fs.existsSync(path)) {
-                fs.mkdirSync(path);
+            let snapshotDB;
+            if (typeof options.snapshots.max === "number") {
+                snapshotDB = new Database(path.join(folderPath, "./snapshot-tracking.json"));
+                snapshotDB.setLocal("note", "This only tracks which snapshots are the oldest to delete when maximum snapshots are reached. In the event you lose some files in this folder, you don't NEED this one.");
+                snapshotDB.updateLocal("snapshots", (v) => v || []);
+                snapshotDB.saveDataToFile();
             }
+
             setInterval(() => {
-                this.makeSnapshot(path);
-            }, this.options.snapshots.interval);
+                const fileName = this.makeSnapshot(folderPath, this.options.snapshots.indented);
+
+                if (typeof options.snapshots.max === "number") {
+                    snapshotDB.update("snapshots", (shots = []) => {
+                        shots.push(fileName);
+
+                        if (shots.length > options.snapshots.max) {
+                            const removedSnapshot = shots.shift();
+                            const removedPath = path.join(folderPath, removedSnapshot);
+                            if (fs.existsSync(removedPath)) fs.rmSync(removedPath);
+                        }
+                        return shots;
+                    });
+                }
+            }, options.snapshots.interval);
         }
 
         /**
@@ -90,26 +112,31 @@ class Database {
      * Write data to the json file.
      */
     saveDataToFile() {
-        fs.writeFileSync(this.jsonFilePath, JSON.stringify(this.data, null, 2), "utf-8");
+        const data = this.options.indented ? JSON.stringify(this.data, null, 4) : JSON.stringify(this.data);
+        fs.writeFileSync(this.jsonFilePath, data, "utf-8");
     }
 
     /**
-     * Make a snapshot of the database and save it in the snapshot folder
+     * Make a snapshot of the database and save it in the provided folder path
      * @param {string} folderPath The path where the snapshot will be stored
+     * @param {boolean?} indented 
      */
-    makeSnapshot(folderPath) {
+    makeSnapshot(folderPath, indented) {
         if (!fs.existsSync(folderPath)) {
             fs.mkdirSync(folderPath);
         }
 
-        // we want something like "snapshot-database-14278912741.json" from "snapshots/database.json"
+        // we want something like "snapshot-14278912741-database.json" from "snapshots/database.json"
         // get the last file name, split by dot, and remove the file ext then join the rest again
         const splitName = path.basename(this.jsonFilePath).split(".");
         splitName.pop();
 
         const databaseName = splitName.join(".");
         const fileName = `snapshot-${databaseName}-${Date.now()}.json`;
-        fs.writeFileSync(path.join(folderPath, fileName));
+
+        const data = indented ? JSON.stringify(this.data, null, 4) : JSON.stringify(this.data);
+        fs.writeFileSync(path.join(folderPath, fileName), data, "utf-8");
+        return fileName;
     }
 
     /**

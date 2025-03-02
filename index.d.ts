@@ -3,9 +3,13 @@ declare module 'simple-json-database' {
         enabled: boolean;
         path: string;
         interval: number;
+        indented?: boolean;
+        max?: number;
     };
 
     interface DatabaseOptions {
+        forceNew?: boolean;
+        indented?: boolean;
         snapshots?: SnapshotsOptions;
     };
 
@@ -39,5 +43,5 @@ declare module 'simple-json-database' {
         
         public has (key: string): boolean;
         public array (outputType: "keys" | "values" | null): string|DatabaseElement[];
-    }
+    };
 };
