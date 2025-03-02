@@ -1,10 +1,10 @@
 {
-    "name": "easy-json-database",
-    "version": "1.5.1",
-    "description": "Easy database using json",
+    "name": "simple-json-database",
+    "version": "1.0.0",
+    "description": "Helps manage simple JSON files meant for configuration or small databases. Fork of Androz2091's Easy JSON Database.",
     "main": "index.js",
-    "repository": "git+https://github.com/Androz2091/easy-json-database.git",
-    "author": "Androz2091 <androz2091@gmail.com>",
+    "repository": "git+https://github.com/JeremyGamer13/simple-json-database.git",
+    "author": "JeremyGamer13",
     "license": "MIT",
     "typings": "./index.d.ts"
 }

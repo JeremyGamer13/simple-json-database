@@ -1,25 +1,9 @@
 const fs = require("fs");
+const path = require("path");
 
-const setNestedProperty = (object, key, value) => {
-    const properties = key.split('.');
-    let index = 0;
-    for (; index < properties.length - 1; ++index) {
-        object = object[properties[index]];
-    }
-    object[properties[index]] = value;
-}
-
-const getNestedProperty = (object, key) => {
-    const properties = key.split('.');
-    let index = 0;
-    for (; index < properties.length; ++index) {
-        object = object && object[properties[index]];
-    }
-    return object;
-}
-
-module.exports = class EasyJsonDB {
-
+// If you ever need to open the same DB file, we save instances of the DB here
+const instances = {};
+class Database {
     /**
      * @typedef {object} SnapshotOptions
      * @property {boolean} [enabled=false] Whether the snapshots are enabled
@@ -36,13 +20,21 @@ module.exports = class EasyJsonDB {
      * @param {string} filePath The path of the json file used for the database.
      * @param {DatabaseOptions} options
      */
-    constructor(filePath, options){
+    constructor(filePath, options) {
+        if (!(filePath && typeof filePath === "string")) throw new Error("Provide a valid file path for the database");
+
+        if (instances[filePath]) {
+            // if we return an existing instance, javascript will use it instead
+            // see https://stackoverflow.com/questions/11145159/implement-javascript-instance-store-by-returning-existing-instance-from-construc
+            return instances[filePath];
+        }
 
         /**
          * The path of the json file used as database.
          * @type {string}
          */
-        this.jsonFilePath = filePath || "./db.json";
+        this.jsonFilePath = filePath;
+        instances[filePath] = this;
 
         /**
          * The options for the database
@@ -51,13 +43,16 @@ module.exports = class EasyJsonDB {
         this.options = options || {};
 
         if (this.options.snapshots && this.options.snapshots.enabled) {
-            const path = this.options.snapshots.path || './backups/';
+            const path = this.options.snapshots.path;
+            if (!(path && typeof path === "string")) throw new Error("Provide a valid file path for database snapshots");
+            if (typeof this.options.snapshots.interval !== "number") throw new Error("Provide the interval in milliseconds for snapshot creation");
+
             if (!fs.existsSync(path)) {
                 fs.mkdirSync(path);
             }
             setInterval(() => {
-                this.makeSnapshot();
-            }, (this.options.snapshots.interval || 86400000));
+                this.makeSnapshot(path);
+            }, this.options.snapshots.interval);
         }
 
         /**
@@ -66,129 +61,175 @@ module.exports = class EasyJsonDB {
          */
         this.data = {};
 
-        if(!fs.existsSync(this.jsonFilePath)){
+        if (!fs.existsSync(this.jsonFilePath)) {
+            const parentPath = path.dirname(this.jsonFilePath);
+            if (!fs.existsSync(parentPath)) {
+                fs.mkdirSync(parentPath);
+            }
             fs.writeFileSync(this.jsonFilePath, "{}", "utf-8");
         } else {
             this.fetchDataFromFile();
         }
     }
 
-    /**
-     * Make a snapshot of the database and save it in the snapshot folder
-     * @param {string} path The path where the snapshot will be stored
-     */
-    makeSnapshot (path) {
-        path = path || this.options.snapshots.path || './backups/';
-        if (!fs.existsSync(path)) {
-            fs.mkdirSync(path);
-        }
-        const fileName = `snapshot-${Date.now()}.json`;
-        fs.writeFileSync(path.join(path, fileName));
-    }
 
     /**
      * Get data from the json file and store it in the data property.
+     * Can be used to resync with the saved file, just be careful that local changes are saved.
      */
-    fetchDataFromFile(){
+    fetchDataFromFile() {
         const savedData = JSON.parse(fs.readFileSync(this.jsonFilePath));
-        if(typeof savedData === "object"){
+        if (typeof savedData === "object") {
             this.data = savedData;
+        } else {
+            // parsed a string or something
+            throw new Error("Data is not a valid object");
         }
     }
-
     /**
      * Write data to the json file.
      */
-    saveDataToFile(){
+    saveDataToFile() {
         fs.writeFileSync(this.jsonFilePath, JSON.stringify(this.data, null, 2), "utf-8");
+    }
+
+    /**
+     * Make a snapshot of the database and save it in the snapshot folder
+     * @param {string} folderPath The path where the snapshot will be stored
+     */
+    makeSnapshot(folderPath) {
+        if (!fs.existsSync(folderPath)) {
+            fs.mkdirSync(folderPath);
+        }
+
+        // we want something like "snapshot-database-14278912741.json" from "snapshots/database.json"
+        // get the last file name, split by dot, and remove the file ext then join the rest again
+        const splitName = path.basename(this.jsonFilePath).split(".");
+        splitName.pop();
+
+        const databaseName = splitName.join(".");
+        const fileName = `snapshot-${databaseName}-${Date.now()}.json`;
+        fs.writeFileSync(path.join(folderPath, fileName));
     }
 
     /**
      * Get data for a key in the database
      * @param {string} key 
      */
-    get(key){
-        return getNestedProperty(this.data, key);
+    get(key) {
+        return this.data[key];
     }
-
-    /**
-     * Check if a key data exists.
-     * @param {string} key 
-     */
-    has(key){
-        return getNestedProperty(this.data, key) != undefined;
-    }
-    
     /**
      * Set new data for a key in the database.
      * @param {string} key
      * @param {*} value 
      */
-    set(key, value){
-        setNestedProperty(this.data, key, value);
+    set(key, value) {
+        this.data[key] = value;
         this.saveDataToFile();
+    }
+    /**
+     * Set new data locally (not saved to the DB file)
+     * Recommended for bulk operations.
+     * Save using this.saveDataToFile()
+     * @param {string} key
+     * @param {*} value 
+     */
+    setLocal(key, value) {
+        this.data[key] = value;
+    }
+
+    /**
+     * Modify a key in the database with a custom callback, using the value of the key as an input to the callback.
+     * The callback must return the new value of the key to use.
+     * @param {string} key 
+     * @param {(value:any) => any} callback 
+     */
+    update(key, callback) {
+        const value = this.get(key);
+        const newValue = callback(value);
+        this.set(key, newValue);
+    }
+    /**
+     * Modify a key in the database locally with a custom callback, using the value of the key as an input to the callback.
+     * The callback must return the new value of the key to use.
+     * 
+     * Recommended for bulk operations.
+     * Save using this.saveDataToFile()
+     * @param {string} key 
+     * @param {(value:any) => any} callback 
+     */
+    updateLocal(key, callback) {
+        const value = this.get(key);
+        const newValue = callback(value);
+        this.setLocal(key, newValue);
     }
 
     /**
      * Delete data for a key from the database.
      * @param {string} key 
      */
-    delete(key){
+    delete(key) {
         delete this.data[key];
         this.saveDataToFile();
     }
-
     /**
-     * Add a number to a key in the database.
+     * Delete data for a key from the database locally (not saved to the DB file)
+     * Recommended for bulk operations.
+     * Save using this.saveDataToFile()
      * @param {string} key 
-     * @param {number} count 
      */
-    add(key, count){
-        if(!this.data[key]) this.data[key] = 0;
-        this.data[key] += count;
-        this.saveDataToFile();
+    deleteLocal(key) {
+        delete this.data[key];
     }
 
     /**
-     * Subtract a number to a key in the database.
-     * @param {string} key 
-     * @param {number} count 
+     * Deletes the entire database.
      */
-    subtract(key, count){
-        if(!this.data[key]) this.data[key] = 0;
-        this.data[key] -= count;
-        this.saveDataToFile();
-    }
-
-    /**
-     * Push an element to a key in the database.
-     * @param {string} key 
-     * @param {*} element 
-     */
-    push(key, element){
-        if (!this.data[key]) this.data[key] = [];
-        this.data[key].push(element);
-        this.saveDataToFile();
-    }
-
-    /**
-     * Clear the database.
-     */
-    clear(){
+    deleteAll() {
         this.data = {};
         this.saveDataToFile();
     }
-
     /**
-     * Get all the data from the database.
+     * Deletes the entire database locally (not saved to the DB file)
+     * Save using this.saveDataToFile()
      */
-    all(){
-        return Object.keys(this.data).map((key) => {
-            return {
-                key,
-                data: this.data[key]
-            }
-        });
+    deleteAllLocal() {
+        this.data = {};
     }
 
+    /**
+     * Check if a key exists in the database.
+     * @param {string} key 
+     */
+    has(key) {
+        // https://eslint.org/docs/latest/rules/no-prototype-builtins
+        return Object.prototype.hasOwnProperty.call(this.data, key);
+    }
+    /**
+     * Get all the data from the database as an array.
+     * outputType is an optional parameter that will output the data either as only keys, values, or both.
+     * Don't provide the outputType parameter to output both keys and values.
+     * 
+     * The default output is formatted as [{ key:string, value:any }]
+     * @param {"keys"|"values"|null} outputType Determines how the data is output.
+     * @returns {Array<string|{key:string, value:any}>}
+     */
+    array(outputType) {
+        switch (outputType) {
+            case "keys":
+                return Object.keys(this.data);
+            case "values":
+                return Object.values(this.data);
+            default:
+                return Object.keys(this.data).map((key) => {
+                    return {
+                        key,
+                        value: this.data[key]
+                    }
+                });
+        }
+    }
 };
+
+module.exports = Database;
