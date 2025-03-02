@@ -3,6 +3,7 @@ const path = require("path");
 
 // If you ever need to open the same DB file, we save instances of the DB here
 const instances = {};
+
 class Database {
     /**
      * @typedef {object} SnapshotOptions

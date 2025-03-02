@@ -7,5 +7,5 @@
     "author": "JeremyGamer13",
     "keywords": ["database", "config", "json", "easy", "simple", "configuration", "db"],
     "license": "MIT",
-    "typings": "./index.d.ts"
+    "types": "./index.d.ts"
 }
