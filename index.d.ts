@@ -1,9 +1,8 @@
-declare module 'easy-json-database' {
-    
+declare module 'simple-json-database' {
     interface SnapshotsOptions {
         enabled: boolean;
-        path?: string;
-        interval?: number;
+        path: string;
+        interval: number;
     };
 
     interface DatabaseOptions {
@@ -12,28 +11,33 @@ declare module 'easy-json-database' {
 
     interface DatabaseElement {
         key: string;
-        data: unknown;
+        value: unknown;
     };
 
-    export default class EasyJsonDB {
+    export default class Database {
         constructor (filePath?: string, options?: DatabaseOptions);
 
         public jsonFilePath: string;
         public options: DatabaseOptions;
         public data: Record<string, unknown>;
 
-        private fetchDataFromFile (): void;
-        private saveDataToFile (): void;
+        public fetchDataFromFile (): void;
+        public saveDataToFile (): void;
+        public makeSnapshot (folderPath: string): void;
 
-        public makeSnapshot (path?: string): void;
         public get (key: string): unknown;
-        public set (key: string, value: any): void;
-        public has (key: string): boolean;
+        public set (key: string, value: unknown): void;
+        public setLocal (key: string, value: unknown): void;
+
+        public update (key: string, callback: (value: unknown) => unknown): void;
+        public updateLocal (key: string, callback: (value: unknown) => unknown): void;
+
         public delete (key: string): void;
-        public add (key: string, count: number): void;
-        public subtract (key: string, count: number): void;
-        public push (key: string, element: any): void;
-        public clear (key: string): void;
-        public all (): DatabaseElement[];
+        public deleteLocal (key: string): void;
+        public deleteAll (): void;
+        public deleteAllLocal (): void;
+        
+        public has (key: string): boolean;
+        public array (outputType: "keys" | "values" | null): string|DatabaseElement[];
     }
-}
+};

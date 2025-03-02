@@ -143,7 +143,7 @@ class Database {
      * Modify a key in the database with a custom callback, using the value of the key as an input to the callback.
      * The callback must return the new value of the key to use.
      * @param {string} key 
-     * @param {(value:any) => any} callback 
+     * @param {(value:unknown) => unknown} callback 
      */
     update(key, callback) {
         const value = this.get(key);
@@ -157,7 +157,7 @@ class Database {
      * Recommended for bulk operations.
      * Save using this.saveDataToFile()
      * @param {string} key 
-     * @param {(value:any) => any} callback 
+     * @param {(value:unknown) => unknown} callback 
      */
     updateLocal(key, callback) {
         const value = this.get(key);
@@ -211,9 +211,9 @@ class Database {
      * outputType is an optional parameter that will output the data either as only keys, values, or both.
      * Don't provide the outputType parameter to output both keys and values.
      * 
-     * The default output is formatted as [{ key:string, value:any }]
+     * The default output is formatted as [{ key:string, value:unknown }]
      * @param {"keys"|"values"|null} outputType Determines how the data is output.
-     * @returns {Array<string|{key:string, value:any}>}
+     * @returns {Array<string|{key:string, value:unknown}>}
      */
     array(outputType) {
         switch (outputType) {
