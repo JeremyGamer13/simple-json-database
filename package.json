@@ -1,11 +1,23 @@
 {
-    "name": "simple-json-database",
+    "name": "sync-json-database",
     "version": "1.0.0",
     "description": "Helps manage simple JSON files meant for configuration or small databases. Fork of Androz2091's Easy JSON Database.",
     "main": "index.js",
-    "repository": "git+https://github.com/JeremyGamer13/simple-json-database.git",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/JeremyGamer13/sync-json-database.git"
+    },
     "author": "JeremyGamer13",
-    "keywords": ["database", "config", "json", "easy", "simple", "configuration", "db"],
+    "keywords": [
+        "database",
+        "config",
+        "json",
+        "easy",
+        "synchronous",
+        "sync",
+        "configuration",
+        "db"
+    ],
     "license": "MIT",
     "types": "./index.d.ts"
 }

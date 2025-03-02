@@ -1,7 +1,9 @@
-# Simple JSON Database
+# Sync JSON Database
 
 This is a fork of [Easy JSON Database](https://github.com/Androz2091/easy-json-database) which is meant to be used for configuration files or small databases in local apps.
 The package is intended to be used in regular code, so unlike the original, you do need to provide valid paths and inputs to functions that expect them.
+
+This package uses node's `fs` and `path` modules, with `fs` being used synchronously.
 
 ## Changes
 Importing the same file in different areas of your program will use the same instance. This is to prevent desync.
@@ -69,7 +71,7 @@ Making a snapshot manually via `makeSnapshot` bypasses any of the snapshot setti
 ```js
 const path = require("path");
 
-const Database = require("simple-json-database");
+const Database = require("sync-json-database");
 const db = new Database(path.join(__dirname, "./db.json"), {
     indented: true,
     snapshots: {
