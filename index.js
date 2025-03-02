@@ -87,7 +87,7 @@ class Database {
         if (!fs.existsSync(this.jsonFilePath)) {
             const parentPath = path.dirname(this.jsonFilePath);
             if (!fs.existsSync(parentPath)) {
-                fs.mkdirSync(parentPath);
+                fs.mkdirSync(parentPath, { recursive: true });
             }
             fs.writeFileSync(this.jsonFilePath, "{}", "utf-8");
         } else {
@@ -124,7 +124,7 @@ class Database {
      */
     makeSnapshot(folderPath, indented) {
         if (!fs.existsSync(folderPath)) {
-            fs.mkdirSync(folderPath);
+            fs.mkdirSync(folderPath, { recursive: true });
         }
 
         // we want something like "snapshot-14278912741-database.json" from "snapshots/database.json"
